@@ -1,0 +1,106 @@
+# -*- org-src-preserve-indentation: t; org-edit-src-content: 0; -*-
+#+TITLE: Basic Movie Recommender
+#+SUBTITLE: Following this tutorial: https://bit.ly/3rKsvnK
+#+AUTHOR: Yusuf Mohammad
+#+date: \today
+#+OPTIONS: toc:nil
+
+* Prerequisites
+  
+#+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+import pandas as pd
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.feature_extraction.text import CountVectorizer
+
+#+end_src
+
+#+RESULTS:
+
+
+* reading IMDB datasets
+
+  #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+  title_basics = pd.read_csv(
+	'IMDBDataSets/title.basics.tsv', sep='\t', na_values='\\N')
+
+  title_ratings = pd.read_csv(
+      'IMDBDataSets/title.ratings.tsv', sep='\t', na_values='\\N')
+
+  title_crew = pd.read_csv(
+      'IMDBDataSets/title.crew.tsv', sep='\t', na_values='\\N')
+  #+end_src
+
+  #+RESULTS:
+  : /tmp/pyu3rlkS:3: DtypeWarning: Columns (7) have mixed types.Specify dtype option on import or set low_memory=False.
+  
+#+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+print(title_crew.columns)
+#+end_src
+
+#+RESULTS:
+: Index(['tconst', 'directors', 'writers'], dtype='object')
+
+* Fix genres showing in runtimeMinutes column 
+
+  #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+nonnull_runtimeminutes = title_basics.runtimeMinutes[title_basics.runtimeMinutes.notna()]
+text_indexes = nonnull_runtimeminutes[
+    nonnull_runtimeminutes.astype(str).str.match(r'^\D.*')].index
+title_basics.loc[text_indexes, 'genres'] = title_basics.loc[text_indexes, 'runtimeMinutes'].tolist()
+title_basics.loc[text_indexes, 'runtimeMinutes'] = np.nan
+
+  #+end_src
+
+  #+RESULTS:
+
+* Add ratings to main table  
+
+  #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+title_basics = title_basics.join(title_ratings.set_index('tconst'), on='tconst')
+  #+end_src
+
+  #+RESULTS:
+
+  #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+  print(title_basics[title_basics.averageRating.notna() & title_basics.numVotes.notna()].shape)
+
+  fil_title_basics = title_basics[['tconst', 'primaryTitle', 'originalTitle', 'isAdult', 'startYear', 'genres', 'averageRating', 'numVotes']].dropna(how='any')
+
+  fil_title_basics = fil_title_basics.join(title_basics.set_index('tconst')[['endYear']], on='tconst')
+  print(fil_title_basics.columns)
+  #+end_src
+
+  #+RESULTS:
+  #+begin_example
+  (1006172, 11)
+	      tconst               primaryTitle  ... numVotes  endYear
+  0        tt0000001                 Carmencita  ...   1561.0      NaN
+  1        tt0000002     Le clown et ses chiens  ...    188.0      NaN
+  2        tt0000003             Pauvre Pierrot  ...   1225.0      NaN
+  3        tt0000004                Un bon bock  ...    114.0      NaN
+  4        tt0000005           Blacksmith Scene  ...   1958.0      NaN
+  ...            ...                        ...  ...      ...      ...
+  6419747  tt9916576           Destinee's Story  ...      7.0      NaN
+  6419748  tt9916578  The Trial of Joan Collins  ...     12.0      NaN
+  6419815  tt9916720                  The Nun 2  ...     44.0      NaN
+  6419836  tt9916766             Episode #10.15  ...     11.0      NaN
+  6419841  tt9916778                     Escape  ...     16.0      NaN
+
+  [985367 rows x 9 columns]
+  Index(['tconst', 'primaryTitle', 'originalTitle', 'isAdult', 'startYear',
+	 'genres', 'averageRating', 'numVotes', 'endYear'],
+	dtype='object')
+  #+end_example
+
+* interesting features for similarity
+
+  #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+print(fil_title_basics.columns)
+features = ['primaryTitle', 'genres', 'averageRating', 'startYear']
+  #+end_src
+
+  #+RESULTS:
+  : Index(['tconst', 'primaryTitle', 'originalTitle', 'isAdult', 'startYear',
+  :        'genres', 'averageRating', 'numVotes', 'endYear'],
+  :       dtype='object')
