@@ -26,18 +26,14 @@ title_basics = pd.read_csv(
 
 title_ratings = pd.read_csv(
       'IMDBDataSets/title.ratings.tsv', sep='\t', na_values='\\N')
-
-title_crew = pd.read_csv(
-      'IMDBDataSets/title.crew.tsv', sep='\t', na_values='\\N')
   #+end_src
 
   #+RESULTS:
-  : sys:1: DtypeWarning: Columns (7) have mixed types.Specify dtype option on import or set low_memory=False.
+  : /tmp/pyyI6RZf:3: DtypeWarning: Columns (7) have mixed types.Specify dtype option on import or set low_memory=False.
   
 #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
 print(title_basics.columns)
 print(title_ratings.columns)
-print(title_crew.columns)
 #+end_src
 
 #+RESULTS:
@@ -45,7 +41,6 @@ print(title_crew.columns)
 :        'startYear', 'endYear', 'runtimeMinutes', 'genres'],
 :       dtype='object')
 : Index(['tconst', 'averageRating', 'numVotes'], dtype='object')
-: Index(['tconst', 'directors', 'writers'], dtype='object')
 
 * Fix genres showing in runtimeMinutes column 
 
@@ -60,25 +55,49 @@ title_basics.loc[text_indexes, 'runtimeMinutes'] = np.nan
 
   #+RESULTS:
 
+* Movies only, non-adult only
+  #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+print(title_basics.columns)
+  #+end_src
+
+  #+RESULTS:
+  : Index(['tconst', 'titleType', 'primaryTitle', 'originalTitle', 'isAdult',
+  :        'startYear', 'endYear', 'runtimeMinutes', 'genres'],
+  :       dtype='object')
+  
+#+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+print(title_basics.titleType.unique())
+#+end_src
+
+#+RESULTS:
+: ['short' 'movie' 'tvMovie' 'tvSeries' 'tvEpisode' 'tvShort' 'tvMiniSeries'
+:  'tvSpecial' 'video' 'videoGame']
+
+#+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+ignored_cols = ['titleType', 'isAdult', 'endYear', 'runtimeMinutes', 'numVotes']
+fil_title_basics = title_basics[title_basics.titleType.isin(['movie', 'tvMovie'])][title_basics.isAdult == 0][[c for c in title_basics.columns if c not in ignored_cols]]
+#+end_src
+
+#+RESULTS:
+: /tmp/babel-fOUvza/python-Lon48U:2: UserWarning: Boolean Series key will be reindexed to match DataFrame index.
+:   fil_title_basics = title_basics[title_basics.titleType.isin(['movie', 'tvMovie'])][title_basics.isAdult == 0][[c for c in title_basics.columns if c not in ignored_cols]]
+
 * Add ratings to main table  
 
   #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
-title_basics = title_basics.join(title_ratings.set_index('tconst'), on='tconst')
+fil_title_basics = fil_title_basics.join(title_ratings.set_index('tconst'), on='tconst')
   #+end_src
 
   #+RESULTS:
 
   #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
-print(title_basics[title_basics.averageRating.notna() & title_basics.numVotes.notna()].shape)
-
-fil_title_basics = title_basics[['tconst', 'primaryTitle', 'originalTitle', 'isAdult', 'startYear', 'genres', 'averageRating', 'numVotes']].dropna(how='any')
-
-fil_title_basics = fil_title_basics.join(title_basics.set_index('tconst')[['endYear']], on='tconst')
-print(fil_title_basics.columns)
+print(fil_title_basics.shape)
+fil_title_basics.dropna(how='any', inplace=True)
+print(fil_title_basics.shape)
   #+end_src
 
   #+RESULTS:
-  : (1005192, 11)
+  : (1006172, 11)
   : Index(['tconst', 'primaryTitle', 'originalTitle', 'isAdult', 'startYear',
   :        'genres', 'averageRating', 'numVotes', 'endYear'],
   :       dtype='object')
@@ -87,40 +106,150 @@ print(fil_title_basics.columns)
 
 ** load names table
   #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
-name_basics = pd.read_csv('IMDBDataSets/name.basics.tsv', sep='\t', na_values='\\n', usecols=['nconst', 'primaryName'])
+name_basics = pd.read_csv('IMDBDataSets/name.basics.tsv', sep='\t', na_values='\\n', usecols=['nconst', 'primaryName']).set_index('nconst')
 print(name_basics.columns)
 print(name_basics.head())
   #+end_src
 
   #+RESULTS:
-  : Index(['nconst', 'primaryName'], dtype='object')
-  :       nconst      primaryName
-  : 0  nm0000001     Fred Astaire
-  : 1  nm0000002    Lauren Bacall
-  : 2  nm0000003  Brigitte Bardot
-  : 3  nm0000004     John Belushi
-  : 4  nm0000005   Ingmar Bergman
+  : Index(['primaryName'], dtype='object')
+  :                primaryName
+  : nconst                    
+  : nm0000001     Fred Astaire
+  : nm0000002    Lauren Bacall
+  : nm0000003  Brigitte Bardot
+  : nm0000004     John Belushi
+  : nm0000005   Ingmar Bergman
 
 ** convert nconst in title_crew to actual names
-#+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
 
+*** Join the resulting table with our title_basics table
+
+     #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+fil_title_basics = fil_title_basics.join(title_crew.set_index('tconst'), on='tconst')
+print(fil_title_basics.columns)
+print(fil_title_basics.head())
+     #+end_src
+
+     #+RESULTS:
+     #+begin_example
+     Index(['tconst', 'primaryTitle', 'originalTitle', 'isAdult', 'startYear',
+	    'genres', 'averageRating', 'numVotes', 'endYear', 'directors',
+	    'writers'],
+	   dtype='object')
+	   tconst            primaryTitle  ... directors  writers
+     0  tt0000001              Carmencita  ...       NaN      NaN
+     1  tt0000002  Le clown et ses chiens  ...       NaN      NaN
+     2  tt0000003          Pauvre Pierrot  ...       NaN      NaN
+     3  tt0000004             Un bon bock  ...       NaN      NaN
+     4  tt0000005        Blacksmith Scene  ...       NaN      NaN
+
+     [5 rows x 11 columns]
+     #+end_example
+ #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+print(fil_title_basics.shape)
+fil_title_basics = fil_title_basics[fil_title_basics.directors.notna() & fil_title_basics.writers.notna()]
+print(fil_title_basics.shape)
+print(fil_title_basics.head())
+ #+end_src
+
+ #+RESULTS:
+ #+begin_example
+ (985367, 11)
+ (722058, 11)
+	 tconst  ...            writers
+ 8    tt0000009  ...    Alexander Black
+ 34   tt0000036  ...  Washington Irving
+ 74   tt0000076  ...  Washington Irving
+ 89   tt0000091  ...     Georges Méliès
+ 106  tt0000108  ...  Washington Irving
+
+ [5 rows x 11 columns]
+ #+end_example
+
+*** Get_names function
+
+    #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+def get_names(nconsts):
+    names_lst = []
+    for nconst in nconsts.split(','):
+        try:
+            names_lst.append(name_basics.loc[nconst, 'primaryName'])
+        except KeyError:
+            continue
+    if names_lst:
+        return ' '.join(names_lst)
+    else:
+        return np.nan
+    #+end_src
+
+    #+RESULTS:
+
+*** Load names table
+#+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+title_crew = pd.read_csv(
+      'IMDBDataSets/title.crew.tsv', sep='\t', na_values='\\N')
 #+end_src
+
+#+RESULTS:
+
+*** Drop null rows and number only records
+#+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+title_crew.dropna(how='any', inplace=True)
+title_crew[~title_crew.directors.astype(str).str.isnumeric()]
+title_crew[~title_crew.writers.astype(str).str.isnumeric()]
+print(title_crew.head())
+#+end_src
+
+#+RESULTS:
+:         tconst  directors    writers
+: 8    tt0000009  nm0085156  nm0085156
+: 34   tt0000036  nm0005690  nm0410331
+: 74   tt0000076  nm0005690  nm0410331
+: 89   tt0000091  nm0617588  nm0617588
+: 106  tt0000108  nm0005690  nm0410331
+
+*** Get the names now
+#+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+title_crew.directors = title_crew.directors.apply(get_names)
+title_crew.writers = title_crew.writers.apply(get_names)
+title_crew.dropna(how='any', inplace=True)
+#+end_src
+
+#+RESULTS:
+
+#+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+print(title_crew.head())
+print(title_crew.shape)
+#+end_src
+
+#+RESULTS:
+:         tconst             directors            writers
+: 8    tt0000009       Alexander Black    Alexander Black
+: 34   tt0000036  William K.L. Dickson  Washington Irving
+: 74   tt0000076  William K.L. Dickson  Washington Irving
+: 89   tt0000091        Georges Méliès     Georges Méliès
+: 106  tt0000108  William K.L. Dickson  Washington Irving
+: (2860334, 3)
 
 * interesting features for similarity
 
   #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
 print(fil_title_basics.columns)
-features = ['primaryTitle', 'genres', 'averageRating', 'startYear']
+important_features = ['primaryTitle', 'genres', 'startYear', 'directors', 'writers']
   #+end_src
 
   #+RESULTS:
   : Index(['tconst', 'primaryTitle', 'originalTitle', 'isAdult', 'startYear',
-  :        'genres', 'averageRating', 'numVotes', 'endYear'],
+  :        'genres', 'averageRating', 'numVotes', 'endYear', 'directors',
+  :        'writers'],
   :       dtype='object')
 
 ** Combine them into a single column
 
    #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
 def combine_features(row):
+    return " ".join(row[feature] for feature in important_features)
    #+end_src
 
+   #+RESULTS:
