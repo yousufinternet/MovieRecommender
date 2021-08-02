@@ -7,7 +7,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 
 
 def get_title_from_index(idx, movies_df):
-    return movies_df.loc[idx, ['primaryTitle', 'startYear']]
+    return movies_df.loc[idx, ['tconst', 'primaryTitle', 'startYear', 'CombinedFeatures']]
 
 
 def get_user_movie(movies_df):
@@ -41,7 +41,6 @@ with open('Filtered_Titles', 'rb') as f:
     fil_title_basics = pickle.load(f)
 fil_title_basics.index = range(len(fil_title_basics))
 
-user_movie = get_user_movie(fil_title_basics)
 
 important_features = [
     'primaryTitle', 'genres', 'startYear', 'directors', 'writers']
@@ -55,6 +54,8 @@ def combine_features(row):
 
 
 fil_title_basics['CombinedFeatures'] = fil_title_basics.apply(combine_features, axis=1)
+
+user_movie = get_user_movie(fil_title_basics)
 
 cv = CountVectorizer()
 count_matrix = cv.fit_transform(fil_title_basics.CombinedFeatures)
@@ -70,8 +71,11 @@ print(count_matrix[user_movie.name])
 cosine_sim = cosine_similarity(count_matrix, count_matrix[user_movie.name])
 
 cosine_sim_idx = list(enumerate(cosine_sim))
-best_20 = sorted(cosine_sim_idx, key=lambda x: x[1], reverse=True)[1:20]
+best_20 = sorted(cosine_sim_idx, key=lambda x: x[1], reverse=True)[1:21]
 
+print(user_movie['CombinedFeatures'])
 for i, movie in enumerate(best_20):
     movie_title = get_title_from_index(movie[0], fil_title_basics)
-    print(f'{i:0>2f}.{movie_title.primaryTitle} ({movie_title.startYear}). SCORE: {movie[1]}')
+    print(f'{i+1:0>2}.{movie_title.primaryTitle} ({movie_title.startYear}). SCORE: {movie[1][0]:.4f}')
+    print(f'https://imdb.com/title/{movie_title.tconst}')
+    print(movie_title.CombinedFeatures)

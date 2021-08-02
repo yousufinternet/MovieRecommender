@@ -67,5 +67,7 @@ fil_title_basics = fil_title_basics.join(title_crew.set_index('tconst'), on='tco
 fil_title_basics.startYear = fil_title_basics.startYear.apply(int)
 fil_title_basics.dropna(how='any', inplace=True)
 
+fil_title_basics.genres = fil_title_basics.genres.apply(lambda x: ' '.join(x.split(',')))
+
 with open('Filtered_Titles', 'wb') as f:
     pickle.dump(fil_title_basics, f)
