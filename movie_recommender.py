@@ -37,13 +37,14 @@ def get_user_movie(movies_df):
     return user_movie
 
 
-with open('Filtered_Titles', 'rb') as f:
+with open('FilteredTitlesWithOverview', 'rb') as f:
     fil_title_basics = pickle.load(f)
 fil_title_basics.index = range(len(fil_title_basics))
 
 
 important_features = [
-    'primaryTitle', 'genres', 'startYear', 'directors', 'writers']
+    'primaryTitle', 'genres', 'startYear', 'directors',
+    'writers', 'spoken_languages']
 
 
 def combine_features(row):
@@ -59,19 +60,14 @@ user_movie = get_user_movie(fil_title_basics)
 
 cv = CountVectorizer()
 count_matrix = cv.fit_transform(fil_title_basics.CombinedFeatures)
-
-print(count_matrix)
-print(fil_title_basics)
-
-print(fil_title_basics.shape)
-print(count_matrix.shape)
-print(user_movie.name)
-print(count_matrix[user_movie.name])
+overview_count_matrix = cv.fit_transform(fil_title_basics.overview)
 
 cosine_sim = cosine_similarity(count_matrix, count_matrix[user_movie.name])
+cosine_sim_overview = cosine_similarity(overview_count_matrix, count_matrix[user_movie.name])
 
-cosine_sim_idx = list(enumerate(cosine_sim))
-best_20 = sorted(cosine_sim_idx, key=lambda x: x[1], reverse=True)[1:21]
+combined_cosine_sim = list(zip(cosine_sim, cosine_sim_overview))
+cosine_sim_idx = list(enumerate(combined_cosine_sim))
+best_20 = sorted(cosine_sim_idx, key=lambda x: (x[1][0]*2+x[1][1])/3, reverse=True)[1:21]
 
 print(user_movie['CombinedFeatures'])
 for i, movie in enumerate(best_20):
