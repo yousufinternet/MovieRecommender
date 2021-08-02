@@ -7,7 +7,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 
 
 def get_title_from_index(idx, movies_df):
-    return movies_df.loc[idx, ['tconst', 'primaryTitle', 'startYear', 'CombinedFeatures']]
+    return movies_df.loc[idx, ['tconst', 'primaryTitle', 'startYear', 'CombinedFeatures', 'averageRating']]
 
 
 def get_user_movie(movies_df):
@@ -24,7 +24,7 @@ def get_user_movie(movies_df):
             print('Please choose from matchings below:')
             print("\n".join(f'{i}. {title} ({startYear})'
                             for i, (title, startYear)
-                            in enumerate(sim_movies[['primaryTitle', 'startYear']].itertuples(False, None))))
+                            in enumerate(sim_movies[['primaryTitle', 'startYear']].iloc[:15].itertuples(False, None))))
             while True:
                 user_input = input('Enter movie number: ')
                 if user_input.isnumeric() and int(user_input) < min(len(sim_movies), 10):
@@ -37,14 +37,19 @@ def get_user_movie(movies_df):
     return user_movie
 
 
-with open('FilteredTitlesWithOverview', 'rb') as f:
-    fil_title_basics = pickle.load(f)
-fil_title_basics.index = range(len(fil_title_basics))
+def get_movie_rating(idx, movies_df):
+    return movies_df.loc[idx, ['averageRating', 'numVotes']]
 
+
+with open('FilteredTitles_Overview', 'rb') as f:
+    fil_title_basics = pickle.load(f)
+
+fil_title_basics.dropna(how='any', inplace=True)
+fil_title_basics.index = range(len(fil_title_basics))
 
 important_features = [
     'primaryTitle', 'genres', 'startYear', 'directors',
-    'writers', 'spoken_languages']
+    'writers', 'original_language']
 
 
 def combine_features(row):
@@ -63,15 +68,28 @@ count_matrix = cv.fit_transform(fil_title_basics.CombinedFeatures)
 overview_count_matrix = cv.fit_transform(fil_title_basics.overview)
 
 cosine_sim = cosine_similarity(count_matrix, count_matrix[user_movie.name])
-cosine_sim_overview = cosine_similarity(overview_count_matrix, count_matrix[user_movie.name])
+cosine_sim_overview = cosine_similarity(overview_count_matrix, overview_count_matrix[user_movie.name])
 
 combined_cosine_sim = list(zip(cosine_sim, cosine_sim_overview))
 cosine_sim_idx = list(enumerate(combined_cosine_sim))
-best_20 = sorted(cosine_sim_idx, key=lambda x: (x[1][0]*2+x[1][1])/3, reverse=True)[1:21]
+# best_20 = sorted(cosine_sim_idx, key=lambda x: (x[1][0]*2+x[1][1])/3, reverse=True)[1:11]
+def scores_sorting_func(x):
+    cosine_scores = sum(x[1])
+    movie_rating = get_movie_rating(x[0], fil_title_basics)
+    corr_movie_rat = movie_rating.averageRating/80
+    corr_num_votes = movie_rating.numVotes / (fil_title_basics.numVotes.max()*8)
+    final_score = cosine_scores + corr_movie_rat + corr_num_votes
+    if final_score > 2:
+        print(get_title_from_index(x[0], fil_title_basics))
+        print(cosine_scores)
+        print(corr_movie_rat, corr_num_votes)
+        print(final_score)
+    return final_score / 2.25
+
+best_20 = sorted(cosine_sim_idx, key=scores_sorting_func, reverse=True)[1:11]
 
 print(user_movie['CombinedFeatures'])
 for i, movie in enumerate(best_20):
     movie_title = get_title_from_index(movie[0], fil_title_basics)
-    print(f'{i+1:0>2}.{movie_title.primaryTitle} ({movie_title.startYear}). SCORE: {movie[1][0]:.4f}')
+    print(f'{i+1:0>2}.{movie_title.primaryTitle} ({movie_title.startYear}).\n IMDB RATING: {movie_title.averageRating} SCORE: {movie[1]}')
     print(f'https://imdb.com/title/{movie_title.tconst}')
-    print(movie_title.CombinedFeatures)

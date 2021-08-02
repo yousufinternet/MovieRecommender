@@ -15,7 +15,9 @@ title_ratings = pd.read_csv(
 nonnull_runtimeminutes = title_basics.runtimeMinutes[title_basics.runtimeMinutes.notna()]
 text_indexes = nonnull_runtimeminutes[
     nonnull_runtimeminutes.astype(str).str.match(r'^\D.*')].index
-title_basics.loc[text_indexes, 'genres'] = title_basics.loc[text_indexes, 'runtimeMinutes'].tolist()
+
+title_basics.loc[text_indexes, 'genres'] = title_basics.loc[
+    text_indexes, 'runtimeMinutes'].tolist()
 title_basics.loc[text_indexes, 'runtimeMinutes'] = np.nan
 
 ignored_cols = ['titleType', 'isAdult', 'endYear', 'runtimeMinutes', 'numVotes']
@@ -42,11 +44,12 @@ title_crew = pd.read_csv(
 def get_names(nconsts):
     '''
     given imdb name keys, return actual names
+    I have merged first and middle names on purpose to increase matching accuracy
     '''
     names_lst = []
     for nconst in nconsts.split(','):
         try:
-            names_lst.append(name_basics.loc[nconst, 'primaryName'])
+            names_lst.append(''.join(name_basics.loc[nconst, 'primaryName'].split()))
         except KeyError:
             continue
     if names_lst:
@@ -69,5 +72,10 @@ fil_title_basics.dropna(how='any', inplace=True)
 
 fil_title_basics.genres = fil_title_basics.genres.apply(lambda x: ' '.join(x.split(',')))
 
-with open('Filtered_Titles', 'wb') as f:
+movies_overview = pd.read_csv('IMDBDataSets/movies_metadata.csv', usecols=['imdb_id', 'original_language', 'overview']).set_index('imdb_id').dropna(how='any')
+
+fil_title_basics = fil_title_basics.join(movies_overview, on='tconst')
+
+with open('FilteredTitles_Overview', 'wb') as f:
     pickle.dump(fil_title_basics, f)
+
