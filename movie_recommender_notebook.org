@@ -18,158 +18,143 @@ from sklearn.feature_extraction.text import CountVectorizer
 #+RESULTS:
 
 
-* reading IMDB datasets
+* Data perparation
+** reading IMDB datasets
 
-  #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+   #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
 title_basics = pd.read_csv(
 	'IMDBDataSets/title.basics.tsv', sep='\t', na_values='\\N')
 
 title_ratings = pd.read_csv(
       'IMDBDataSets/title.ratings.tsv', sep='\t', na_values='\\N')
-  #+end_src
+   #+end_src
 
-  #+RESULTS:
-  : /tmp/pyyI6RZf:3: DtypeWarning: Columns (7) have mixed types.Specify dtype option on import or set low_memory=False.
+   #+RESULTS:
+   : sys:1: DtypeWarning: Columns (7) have mixed types.Specify dtype option on import or set low_memory=False.
   
-#+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+ #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
 print(title_basics.columns)
 print(title_ratings.columns)
-#+end_src
+ #+end_src
 
-#+RESULTS:
-: Index(['tconst', 'titleType', 'primaryTitle', 'originalTitle', 'isAdult',
-:        'startYear', 'endYear', 'runtimeMinutes', 'genres'],
-:       dtype='object')
-: Index(['tconst', 'averageRating', 'numVotes'], dtype='object')
+ #+RESULTS:
+ : Index(['tconst', 'titleType', 'primaryTitle', 'originalTitle', 'isAdult',
+ :        'startYear', 'endYear', 'runtimeMinutes', 'genres'],
+ :       dtype='object')
+ : Index(['tconst', 'averageRating', 'numVotes'], dtype='object')
 
-* Fix genres showing in runtimeMinutes column 
+** Fix genres showing in runtimeMinutes column 
 
-  #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+   #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
 nonnull_runtimeminutes = title_basics.runtimeMinutes[title_basics.runtimeMinutes.notna()]
 text_indexes = nonnull_runtimeminutes[
     nonnull_runtimeminutes.astype(str).str.match(r'^\D.*')].index
 title_basics.loc[text_indexes, 'genres'] = title_basics.loc[text_indexes, 'runtimeMinutes'].tolist()
 title_basics.loc[text_indexes, 'runtimeMinutes'] = np.nan
 
-  #+end_src
+   #+end_src
 
-  #+RESULTS:
+   #+RESULTS:
 
-* Movies only, non-adult only
-  #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+** Movies only, non-adult only
+   #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
 print(title_basics.columns)
-  #+end_src
+   #+end_src
 
-  #+RESULTS:
-  : Index(['tconst', 'titleType', 'primaryTitle', 'originalTitle', 'isAdult',
-  :        'startYear', 'endYear', 'runtimeMinutes', 'genres'],
-  :       dtype='object')
+   #+RESULTS:
+   : Index(['tconst', 'titleType', 'primaryTitle', 'originalTitle', 'isAdult',
+   :        'startYear', 'endYear', 'runtimeMinutes', 'genres'],
+   :       dtype='object')
   
-#+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
-print(title_basics.titleType.unique())
-#+end_src
-
-#+RESULTS:
-: ['short' 'movie' 'tvMovie' 'tvSeries' 'tvEpisode' 'tvShort' 'tvMiniSeries'
-:  'tvSpecial' 'video' 'videoGame']
-
-#+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
-ignored_cols = ['titleType', 'isAdult', 'endYear', 'runtimeMinutes', 'numVotes']
-fil_title_basics = title_basics[title_basics.titleType.isin(['movie', 'tvMovie'])][title_basics.isAdult == 0][[c for c in title_basics.columns if c not in ignored_cols]]
-#+end_src
-
-#+RESULTS:
-: /tmp/babel-fOUvza/python-Lon48U:2: UserWarning: Boolean Series key will be reindexed to match DataFrame index.
-:   fil_title_basics = title_basics[title_basics.titleType.isin(['movie', 'tvMovie'])][title_basics.isAdult == 0][[c for c in title_basics.columns if c not in ignored_cols]]
-
-* Add ratings to main table  
-
-  #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
-fil_title_basics = fil_title_basics.join(title_ratings.set_index('tconst'), on='tconst')
-  #+end_src
-
-  #+RESULTS:
-
-  #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
-print(fil_title_basics.shape)
-fil_title_basics.dropna(how='any', inplace=True)
-print(fil_title_basics.shape)
-  #+end_src
-
-  #+RESULTS:
-  : (1006172, 11)
-  : Index(['tconst', 'primaryTitle', 'originalTitle', 'isAdult', 'startYear',
-  :        'genres', 'averageRating', 'numVotes', 'endYear'],
-  :       dtype='object')
-
-* Add writers and directors
-
-** load names table
-  #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
-name_basics = pd.read_csv('IMDBDataSets/name.basics.tsv', sep='\t', na_values='\\n', usecols=['nconst', 'primaryName']).set_index('nconst')
-print(name_basics.columns)
-print(name_basics.head())
-  #+end_src
-
-  #+RESULTS:
-  : Index(['primaryName'], dtype='object')
-  :                primaryName
-  : nconst                    
-  : nm0000001     Fred Astaire
-  : nm0000002    Lauren Bacall
-  : nm0000003  Brigitte Bardot
-  : nm0000004     John Belushi
-  : nm0000005   Ingmar Bergman
-
-** convert nconst in title_crew to actual names
-
-*** Join the resulting table with our title_basics table
-
-     #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
-fil_title_basics = fil_title_basics.join(title_crew.set_index('tconst'), on='tconst')
-print(fil_title_basics.columns)
-print(fil_title_basics.head())
-     #+end_src
-
-     #+RESULTS:
-     #+begin_example
-     Index(['tconst', 'primaryTitle', 'originalTitle', 'isAdult', 'startYear',
-	    'genres', 'averageRating', 'numVotes', 'endYear', 'directors',
-	    'writers'],
-	   dtype='object')
-	   tconst            primaryTitle  ... directors  writers
-     0  tt0000001              Carmencita  ...       NaN      NaN
-     1  tt0000002  Le clown et ses chiens  ...       NaN      NaN
-     2  tt0000003          Pauvre Pierrot  ...       NaN      NaN
-     3  tt0000004             Un bon bock  ...       NaN      NaN
-     4  tt0000005        Blacksmith Scene  ...       NaN      NaN
-
-     [5 rows x 11 columns]
-     #+end_example
  #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
-print(fil_title_basics.shape)
-fil_title_basics = fil_title_basics[fil_title_basics.directors.notna() & fil_title_basics.writers.notna()]
-print(fil_title_basics.shape)
-print(fil_title_basics.head())
+print(title_basics.titleType.unique())
  #+end_src
 
  #+RESULTS:
- #+begin_example
- (985367, 11)
- (722058, 11)
-	 tconst  ...            writers
- 8    tt0000009  ...    Alexander Black
- 34   tt0000036  ...  Washington Irving
- 74   tt0000076  ...  Washington Irving
- 89   tt0000091  ...     Georges Méliès
- 106  tt0000108  ...  Washington Irving
+ : ['short' 'movie' 'tvSeries' 'tvShort' 'tvMovie' 'tvEpisode' 'tvMiniSeries'
+ :  'tvSpecial' 'video' 'videoGame' 'radioSeries' 'radioEpisode']
 
- [5 rows x 11 columns]
- #+end_example
+ #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+ignored_cols = ['titleType', 'isAdult', 'endYear', 'runtimeMinutes', 'numVotes']
+fil_title_basics = title_basics[title_basics.titleType.isin(['movie', 'tvMovie'])][title_basics.isAdult == 0][[c for c in title_basics.columns if c not in ignored_cols]]
+ #+end_src
 
-*** Get_names function
+ #+RESULTS:
+ : /tmp/babel-HX10sa/python-ZCfs4M:2: UserWarning: Boolean Series key will be reindexed to match DataFrame index.
+ :   fil_title_basics = title_basics[title_basics.titleType.isin(['movie', 'tvMovie'])][title_basics.isAdult == 0][[c for c in title_basics.columns if c not in ignored_cols]]
 
-    #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+ #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+print(fil_title_basics.head())
+print(fil_title_basics.shape)
+print(fil_title_basics.columns)
+ #+end_src
+
+ #+RESULTS:
+ :         tconst                 primaryTitle                originalTitle  startYear                      genres
+ : 498  tt0000502                     Bohemios                     Bohemios     1905.0                         NaN
+ : 570  tt0000574  The Story of the Kelly Gang  The Story of the Kelly Gang     1906.0  Action,Adventure,Biography
+ : 587  tt0000591             The Prodigal Son            L'enfant prodigue     1907.0                       Drama
+ : 610  tt0000615           Robbery Under Arms           Robbery Under Arms     1907.0                       Drama
+ : 625  tt0000630                       Hamlet                       Amleto     1908.0                       Drama
+ : (707275, 5)
+ : Index(['tconst', 'primaryTitle', 'originalTitle', 'startYear', 'genres'], dtype='object')
+
+** Add ratings to main table  
+
+   #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+fil_title_basics = fil_title_basics.join(title_ratings.set_index('tconst'), on='tconst')
+   #+end_src
+
+   #+RESULTS:
+
+   #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+print(fil_title_basics.shape)
+fil_title_basics.dropna(how='any', inplace=True)
+print(fil_title_basics.shape)
+   #+end_src
+
+   #+RESULTS:
+   : (707275, 7)
+   : (271006, 7)
+
+#+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+fil_title_basics = fil_title_basics[(fil_title_basics.averageRating > 5) & (fil_title_basics.numVotes > 1000)]
+#+end_src
+
+#+RESULTS:
+   
+** Add writers and directors
+
+*** load names table
+   #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+name_basics = pd.read_csv('IMDBDataSets/name.basics.tsv', sep='\t', na_values='\\n', usecols=['nconst', 'primaryName']).set_index('nconst')
+print(name_basics.columns)
+print(name_basics.head())
+   #+end_src
+
+   #+RESULTS:
+   : Index(['primaryName'], dtype='object')
+   :                primaryName
+   : nconst                    
+   : nm0000001     Fred Astaire
+   : nm0000002    Lauren Bacall
+   : nm0000003  Brigitte Bardot
+   : nm0000004     John Belushi
+   : nm0000005   Ingmar Bergman
+
+*** convert nconst in title_crew to actual names
+
+**** Load names table
+ #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+title_crew = pd.read_csv(
+      'IMDBDataSets/title.crew.tsv', sep='\t', na_values='\\N')
+ #+end_src
+
+ #+RESULTS:
+
+**** Get_names function
+
+     #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
 def get_names(nconsts):
     names_lst = []
     for nconst in nconsts.split(','):
@@ -181,75 +166,195 @@ def get_names(nconsts):
         return ' '.join(names_lst)
     else:
         return np.nan
-    #+end_src
+     #+end_src
 
-    #+RESULTS:
+     #+RESULTS:
 
-*** Load names table
-#+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
-title_crew = pd.read_csv(
-      'IMDBDataSets/title.crew.tsv', sep='\t', na_values='\\N')
-#+end_src
-
-#+RESULTS:
-
-*** Drop null rows and number only records
-#+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+**** Drop null rows and number only records
+ #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
 title_crew.dropna(how='any', inplace=True)
 title_crew[~title_crew.directors.astype(str).str.isnumeric()]
 title_crew[~title_crew.writers.astype(str).str.isnumeric()]
 print(title_crew.head())
-#+end_src
+ #+end_src
 
-#+RESULTS:
-:         tconst  directors    writers
-: 8    tt0000009  nm0085156  nm0085156
-: 34   tt0000036  nm0005690  nm0410331
-: 74   tt0000076  nm0005690  nm0410331
-: 89   tt0000091  nm0617588  nm0617588
-: 106  tt0000108  nm0005690  nm0410331
+ #+RESULTS:
+ :         tconst  directors    writers
+ : 8    tt0000009  nm0085156  nm0085156
+ : 34   tt0000036  nm0005690  nm0410331
+ : 74   tt0000076  nm0005690  nm0410331
+ : 89   tt0000091  nm0617588  nm0617588
+ : 106  tt0000108  nm0005690  nm0410331
 
-*** Get the names now
-#+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+**** Get the names now
+ #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
 title_crew.directors = title_crew.directors.apply(get_names)
 title_crew.writers = title_crew.writers.apply(get_names)
 title_crew.dropna(how='any', inplace=True)
-#+end_src
+ #+end_src
 
-#+RESULTS:
+ #+RESULTS:
 
-#+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+ #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
 print(title_crew.head())
 print(title_crew.shape)
-#+end_src
+ #+end_src
 
-#+RESULTS:
-:         tconst             directors            writers
-: 8    tt0000009       Alexander Black    Alexander Black
-: 34   tt0000036  William K.L. Dickson  Washington Irving
-: 74   tt0000076  William K.L. Dickson  Washington Irving
-: 89   tt0000091        Georges Méliès     Georges Méliès
-: 106  tt0000108  William K.L. Dickson  Washington Irving
-: (2860334, 3)
+ #+RESULTS:
+ :         tconst             directors            writers
+ : 8    tt0000009       Alexander Black    Alexander Black
+ : 34   tt0000036  William K.L. Dickson  Washington Irving
+ : 74   tt0000076  William K.L. Dickson  Washington Irving
+ : 89   tt0000091        Georges Méliès     Georges Méliès
+ : 106  tt0000108  William K.L. Dickson  Washington Irving
+ : (1996253, 3)
 
-* interesting features for similarity
+*** Join the resulting table with our title_basics table
 
-  #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+     #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+fil_title_basics = fil_title_basics.join(title_crew.set_index('tconst'), on='tconst')
 print(fil_title_basics.columns)
-important_features = ['primaryTitle', 'genres', 'startYear', 'directors', 'writers']
-  #+end_src
+print(fil_title_basics.head())
+     #+end_src
 
-  #+RESULTS:
-  : Index(['tconst', 'primaryTitle', 'originalTitle', 'isAdult', 'startYear',
-  :        'genres', 'averageRating', 'numVotes', 'endYear', 'directors',
-  :        'writers'],
-  :       dtype='object')
+     #+RESULTS:
+     #+begin_example
+     Index(['tconst', 'primaryTitle', 'originalTitle', 'startYear', 'genres',
+	    'averageRating', 'numVotes', 'directors', 'writers'],
+	   dtype='object')
+	      tconst  ...                                         writers
+     2105  tt0002130  ...                                 Dante Alighieri
+     2817  tt0002844  ...  Marcel Allain Louis Feuillade Pierre Souvestre
+     3008  tt0003037  ...  Marcel Allain Louis Feuillade Pierre Souvestre
+     3136  tt0003165  ...  Marcel Allain Louis Feuillade Pierre Souvestre
+     3385  tt0003419  ...              Hanns Heinz Ewers Alfred de Musset
 
-** Combine them into a single column
+     [5 rows x 9 columns]
+     #+end_example
+
+*** Drop rows with null from filtered title basics table
+
+    #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+print(fil_title_basics.shape)
+fil_title_basics.dropna(how='any', inplace=True)
+print(fil_title_basics.shape)
+    #+end_src
+
+    #+RESULTS:
+    : (27865, 9)
+    : (24444, 9)
+
+* Movie Recommender
+** interesting features for similarity
 
    #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
-def combine_features(row):
-    return " ".join(row[feature] for feature in important_features)
+print(fil_title_basics.columns)
+important_features = ['primaryTitle', 'genres', 'startYear', 'directors', 'writers']
    #+end_src
 
    #+RESULTS:
+   : Index(['tconst', 'primaryTitle', 'originalTitle', 'startYear', 'genres',
+   :        'averageRating', 'numVotes', 'directors', 'writers'],
+   :       dtype='object')
+
+*** Combine them into a single column
+
+    #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+def combine_features(row):
+    return " ".join(str(row[feature]) for feature in important_features)
+    #+end_src
+
+    #+RESULTS:
+
+    
+#+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+fil_title_basics['CombinedFeatures'] = fil_title_basics.apply(combine_features, axis=1)
+#+end_src
+
+#+RESULTS:
+
+** Count Vectorizer
+
+   #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+cv = CountVectorizer()
+count_matrix = cv.fit_transform(fil_title_basics.CombinedFeatures)
+   #+end_src
+
+   #+RESULTS:
+
+   #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+print(count_matrix)
+   #+end_src
+
+   #+RESULTS:
+   #+begin_example
+     (0, 7390)	2
+     (0, 14729)	1
+     (0, 577)	1
+     (0, 8602)	1
+     (0, 9991)	1
+     (0, 51)	1
+     (0, 553)	1
+     (0, 23104)	1
+     (0, 10823)	1
+     (0, 3224)	1
+     (0, 11902)	1
+     (0, 7537)	1
+     (0, 18247)	1
+     (0, 935)	1
+     (1, 8602)	1
+     (1, 9995)	1
+     (1, 14662)	1
+     (1, 30923)	2
+     (1, 27930)	1
+     (1, 22616)	1
+     (1, 12644)	1
+     (1, 6954)	1
+     (1, 52)	1
+     (1, 18631)	2
+     (1, 10292)	2
+     :	:
+     (24441, 6417)	1
+     (24441, 919)	2
+     (24441, 160)	1
+     (24441, 1910)	2
+     (24441, 6030)	1
+     (24441, 30339)	1
+     (24442, 6417)	1
+     (24442, 480)	1
+     (24442, 11315)	1
+     (24442, 17260)	2
+     (24442, 17820)	1
+     (24442, 160)	1
+     (24442, 32749)	2
+     (24442, 15299)	1
+     (24442, 23243)	1
+     (24443, 26248)	1
+     (24443, 6417)	1
+     (24443, 18646)	1
+     (24443, 26192)	1
+     (24443, 14775)	1
+     (24443, 13807)	1
+     (24443, 160)	1
+     (24443, 9952)	1
+     (24443, 17264)	1
+     (24443, 11237)	1
+   #+end_example
+
+** Cosine Similarity
+   Refer to the article mentioned in the subtitles for meaning and mathmatical explanation
+   Be careful that this will produce an array of size n^2, which could lead to MemoryError, here we will filter our dataframe for only movies after 2015
+   
+*** reduce df size
+    #+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+print(fil_title_basics[fil_title_basics.startYear > 2010].shape)
+print(32628**2)
+    #+end_src
+
+    #+RESULTS:
+   
+#+begin_src python :session (concat "*Python: " (file-name-nondirectory (buffer-file-name)) "*") :results output :exports both :tangle yes
+cosine_sim = cosine_similarity(count_matrix)
+#+end_src
+
+#+RESULTS:
