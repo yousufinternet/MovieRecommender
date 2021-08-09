@@ -10,7 +10,7 @@ def get_title_from_index(idx, movies_df):
     return movies_df.loc[idx, ['tconst', 'primaryTitle', 'startYear', 'CombinedFeatures', 'averageRating']]
 
 
-def get_user_movie(movies_df):
+def get_user_movies(movies_df):
     while True:
         user_movie = input('Please enter a movie name you like:')
         sim_movies = movies_df[
